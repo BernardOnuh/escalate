@@ -164,7 +164,7 @@ Together they form a fully open, self-hostable AI stack: your model, your gatewa
 python3 -m unittest -v
 ```
 
-There are 17 tests. They cover secret detection (including checks that ordinary developer prompts are *not* flagged), every quality check, and the full proxy end to end against the mock backends: escalation, forced routes, the local model going offline, Otari rejecting a request, and the guarantee that a secret is refused rather than sent to the cloud. CI runs them on Python 3.9 and 3.12.
+There are 17 tests. They cover secret detection (including checks that ordinary developer prompts are *not* flagged), every quality check, and the full proxy end to end against the mock backends: escalation, forced routes, the local model going offline, Otari rejecting a request, and the guarantee that a secret is refused rather than sent to the cloud. CI runs them on Python 3.10 and 3.13, and they also pass on 3.9.
 
 ## Project layout
 
