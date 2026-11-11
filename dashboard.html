@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escalate</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --ink: #1c1c1a; --muted: #6b6b66; --line: #e4e4e0;
+    --local: #1f8a5b; --cloud: #3b5bdb; --priv: #b35c00; --err: #c92a2a;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141413; --card: #1e1e1c; --ink: #ecece8; --muted: #9a9a94; --line: #2e2e2b;
+            --local: #4cc38a; --cloud: #7c95f5; --priv: #f0a04b; --err: #ff6b6b; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; padding: 32px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 24px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); }
+  .route { margin-left: auto; color: var(--muted); font-size: 13px; }
+  .route b { color: var(--ink); font-weight: 600; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .tile .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .tile .v { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .tile .n { color: var(--muted); font-size: 12px; }
+  .bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--line); margin: 20px 0 6px; }
+  .bar div { transition: width .4s ease; }
+  .legend { display: flex; gap: 16px; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+  h2 { font-size: 15px; margin: 32px 0 10px; }
+  .tablewrap { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  tr:last-child td { border-bottom: 0; }
+  td.reason { white-space: normal; min-width: 220px; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; }
+  .pill.local { background: var(--local); } .pill.cloud { background: var(--cloud); } .pill.error { background: var(--err); }
+  .lock { color: var(--priv); font-weight: 600; }
+  .empty { padding: 20px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Escalate</h1>
+    <span class="sub">Local first. Cloud through Otari only when needed.</span>
+    <span class="route" id="models"></span>
+  </header>
+
+  <section class="tiles">
+    <div class="tile"><div class="k">Served locally</div><div class="v" id="localPct">0%</div><div class="n" id="localN">0 of 0 requests</div></div>
+    <div class="tile"><div class="k">Saved vs all-cloud</div><div class="v" id="saved">$0</div><div class="n" id="savedN">all-cloud would cost $0</div></div>
+    <div class="tile"><div class="k">Cloud spend (Otari)</div><div class="v" id="spend">$0</div><div class="n" id="cloudN">0 escalations</div></div>
+    <div class="tile"><div class="k">Private prompts kept on-device</div><div class="v" id="priv">0</div><div class="n">never sent to a cloud provider</div></div>
+  </section>
+
+  <div class="bar"><div id="bLocal" style="background:var(--local);width:0"></div><div id="bCloud" style="background:var(--cloud);width:0"></div><div id="bErr" style="background:var(--err);width:0"></div></div>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--local)"></i>Local</span>
+    <span><i class="dot" style="background:var(--cloud)"></i>Escalated to cloud</span>
+    <span><i class="dot" style="background:var(--err)"></i>Error</span>
+  </div>
+
+  <h2>Recent requests</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Time</th><th>Route</th><th>Why</th><th>Tokens</th><th>Latency</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="5" class="empty">No requests yet. Point your app at /v1 or run bench.py.</td></tr></tbody>
+    </table>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const usd = x => x === 0 ? "$0" : x < 0.01 ? "$" + x.toFixed(5) : "$" + x.toFixed(2);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+async function tick() {
+  let s;
+  try { s = await (await fetch("/stats")).json(); } catch (e) { return; }
+  const n = s.requests || 0, pct = n ? Math.round(100 * s.local / n) : 0;
+  $("models").innerHTML = "local <b>" + esc(s.local_model) + "</b> · cloud <b>" + esc(s.cloud_model) + "</b>";
+  $("localPct").textContent = pct + "%";
+  $("localN").textContent = s.local + " of " + n + " requests";
+  $("saved").textContent = usd(s.saved_usd);
+  $("savedN").textContent = "all-cloud would cost " + usd(s.all_cloud_usd);
+  $("spend").textContent = usd(s.cloud_spend_usd);
+  $("cloudN").textContent = s.cloud + " escalation" + (s.cloud === 1 ? "" : "s");
+  $("priv").textContent = s.private_kept;
+  const w = v => (n ? 100 * v / n : 0) + "%";
+  $("bLocal").style.width = w(s.local); $("bCloud").style.width = w(s.cloud); $("bErr").style.width = w(s.errors);
+  if (s.events.length) {
+    $("rows").innerHTML = s.events.map(e =>
+      "<tr><td>" + new Date(e.t * 1000).toLocaleTimeString() + "</td>" +
+      '<td><span class="pill ' + e.route + '">' + e.route + "</span></td>" +
+      '<td class="reason">' + (e.sensitive && e.sensitive.length ? '<span class="lock">🔒 </span>' : "") + esc(e.reason) + "</td>" +
+      "<td>" + e.tokens + "</td><td>" + e.ms + " ms</td></tr>").join("");
+  } else {
+    $("rows").innerHTML = '<tr><td colspan="5" class="empty">No requests yet. Point your app at /v1 or run bench.py.</td></tr>';
+  }
+}
+tick(); setInterval(tick, 1500);
+</script>
+</body>
+</html>
