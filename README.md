@@ -1,8 +1,6 @@
 <div align="center">
 
-# Escalate
-
-**Local first. Cloud only when it counts. Secrets never leave your machine.**
+<img src="assets/banner.svg" alt="Escalate: local first, cloud only when it counts. Most prompts go to your laptop, hard ones go to the cloud through Otari, and secrets stay local." width="100%">
 
 A drop-in, OpenAI-compatible router that answers with a model on your laptop and escalates to the cloud through [Mozilla.ai's Otari gateway](https://github.com/mozilla-ai/otari) only when the local answer isn't good enough.
 
@@ -29,18 +27,7 @@ Most of the AI traffic a developer generates is small: commit messages, regexes,
 
 Escalate sits between your tools and the models. It gives every request to your **local model first**, checks the answer, and escalates to the cloud only when it has to. The cloud path goes through **Otari**, so escalations get one key for many providers, a **hard budget cap** and usage tracking.
 
-```mermaid
-flowchart LR
-    A[Your app / IDE / agent] -->|OpenAI API| E{Escalate}
-    E -->|contains secrets or personal data| L[🖥️ Local model<br/>Ollama · llamafile]
-    E -->|everyday prompt| L
-    E -->|heavy task: design · proof · architecture · very long| O
-    L --> C{Checks + self-check<br/>confidence 1–5}
-    C -->|passes| A
-    C -->|empty · truncated · bad JSON · hedged · low confidence · offline| O[Otari gateway<br/>keys · budgets · usage]
-    O --> P[☁️ OpenAI · Anthropic · Mistral · …]
-    P --> A
-```
+<img src="assets/how-it-works.svg" alt="How Escalate routes a prompt: a privacy guard keeps secrets local; heavy tasks go straight to Otari; otherwise the local model answers and must pass quality checks and a 1 to 5 self-check, or the prompt escalates through the Otari gateway to a cloud model. Real run: 11 of 18 local, 7 escalated, 4 of 4 secrets kept on-device." width="100%">
 
 | Situation | Where it goes |
 |---|---|
@@ -95,6 +82,10 @@ local 200  Design a distributed cache for user sessions. Customer: bo  private: 
 ...
 18 requests: 11 local (61%), 7 cloud, 0 errors, 4 private prompts kept on-device
 ```
+
+<img src="assets/dashboard.png" alt="The Escalate dashboard after the real run: 61% served locally, 7 escalations through Otari, 4 private prompts kept on-device, and every request with its route, reason, tokens and latency." width="100%">
+
+*The dashboard from that real run. In this test Otari forwarded escalations to the same local model, because no cloud provider key was configured. Add one and escalations reach a real cloud model.*
 
 What the real run taught us: a small model **never says "I'm not sure"**. It answers everything confidently, including niche facts it is making up. Hedge detection alone escalated nothing. Two additions fixed that: asking the model to **rate its own answer** catches the made-up facts, and **heavy-task rules** send design and proof work straight to the cloud. The self-check isn't perfect: one simple summary scored 3/5 and escalated when it didn't need to. That is the safe direction to be wrong in.
 

@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="700" viewBox="0 0 1280 700" role="img" aria-labelledby="t d">
+  <title id="t">How Escalate routes a prompt</title>
+  <desc id="d">A prompt passes a privacy guard (secrets always stay local), a heavy-task check (design, proofs and long prompts go straight to Otari), then the local model answers. Its answer must pass quality checks and a 1 to 5 self-check; otherwise, or if the local model is offline, the prompt escalates through the Otari gateway to a cloud model. In a real run, 11 of 18 prompts stayed local, 7 escalated, and all 4 secrets stayed on-device.</desc>
+  <defs>
+    <marker id="n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#9a9a94"/></marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#4cc38a"/></marker>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#7c95f5"/></marker>
+    <marker id="o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#f0a04b"/></marker>
+  </defs>
+  <rect width="1280" height="700" rx="20" fill="#0e1013"/>
+
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <text x="38" y="56" fill="#f2f2ee" font-size="26" font-weight="700">How Escalate routes a prompt</text>
+    <text x="38" y="84" fill="#9a9a94" font-size="15">Left to right is the happy path: answered free, on your machine. Any red flag drops the prompt into the Otari lane below.</text>
+
+    <!-- privacy lane -->
+    <rect x="214" y="118" width="1028" height="74" rx="14" fill="#1f1810" stroke="#f0a04b" stroke-width="2"/>
+    <g transform="translate(244 155)">
+      <g fill="none" stroke="#f0a04b" stroke-width="2.5" stroke-linecap="round">
+        <rect x="-10" y="-2" width="20" height="15" rx="3" fill="#f0a04b" fill-opacity="0.25"/>
+        <path d="M-6 -2 V-7 a6 6 0 0 1 12 0 V-2"/>
+      </g>
+    </g>
+    <text x="268" y="150" fill="#f2f2ee" font-size="16" font-weight="700">Secret found: always local</text>
+    <text x="268" y="174" fill="#9a9a94" font-size="13">API keys, private keys, passwords, JWTs, emails, card numbers. Cloud blocked even if asked; refused if the local model is down.</text>
+
+    <!-- main row -->
+    <g font-size="15">
+      <rect x="38" y="250" width="148" height="92" rx="14" fill="#1a1d23" stroke="#3a3f4a" stroke-width="2"/>
+      <text x="112" y="290" fill="#f2f2ee" font-weight="700" text-anchor="middle">Your app</text>
+      <text x="112" y="312" fill="#9a9a94" font-size="12" text-anchor="middle">IDE · agent · script</text>
+
+      <rect x="214" y="250" width="148" height="92" rx="14" fill="#1a1d23" stroke="#f0a04b" stroke-width="2"/>
+      <text x="230" y="276" fill="#f0a04b" font-size="12" font-weight="700">1</text>
+      <text x="288" y="296" fill="#f2f2ee" font-weight="700" text-anchor="middle">Privacy guard</text>
+      <text x="288" y="318" fill="#9a9a94" font-size="12" text-anchor="middle">scan for secrets</text>
+
+      <rect x="390" y="250" width="148" height="92" rx="14" fill="#1a1d23" stroke="#c792ea" stroke-width="2"/>
+      <text x="406" y="276" fill="#c792ea" font-size="12" font-weight="700">2</text>
+      <text x="464" y="296" fill="#f2f2ee" font-weight="700" text-anchor="middle">Heavy task?</text>
+      <text x="464" y="318" fill="#9a9a94" font-size="12" text-anchor="middle">design · proof · long</text>
+
+      <rect x="566" y="250" width="148" height="92" rx="14" fill="#1a1d23" stroke="#4cc38a" stroke-width="2"/>
+      <text x="582" y="276" fill="#4cc38a" font-size="12" font-weight="700">3</text>
+      <text x="640" y="296" fill="#f2f2ee" font-weight="700" text-anchor="middle">Local model</text>
+      <text x="640" y="318" fill="#9a9a94" font-size="12" text-anchor="middle">Ollama · llamafile</text>
+
+      <rect x="742" y="250" width="148" height="92" rx="14" fill="#1a1d23" stroke="#4cc38a" stroke-width="2"/>
+      <text x="758" y="276" fill="#4cc38a" font-size="12" font-weight="700">4</text>
+      <text x="816" y="296" fill="#f2f2ee" font-weight="700" text-anchor="middle">Quality checks</text>
+      <text x="816" y="318" fill="#9a9a94" font-size="12" text-anchor="middle">empty · cut off</text>
+      <text x="816" y="334" fill="#9a9a94" font-size="12" text-anchor="middle">bad JSON · hedging</text>
+
+      <rect x="918" y="250" width="148" height="92" rx="14" fill="#1a1d23" stroke="#4cc38a" stroke-width="2"/>
+      <text x="934" y="276" fill="#4cc38a" font-size="12" font-weight="700">5</text>
+      <text x="992" y="296" fill="#f2f2ee" font-weight="700" text-anchor="middle">Self-check</text>
+      <text x="992" y="318" fill="#9a9a94" font-size="12" text-anchor="middle">"how sure? 1–5"</text>
+
+      <rect x="1094" y="250" width="148" height="92" rx="14" fill="#4cc38a" fill-opacity="0.16" stroke="#4cc38a" stroke-width="2"/>
+      <text x="1168" y="292" fill="#4cc38a" font-weight="700" text-anchor="middle">Answered</text>
+      <text x="1168" y="312" fill="#4cc38a" font-weight="700" text-anchor="middle">locally</text>
+      <text x="1168" y="332" fill="#9a9a94" font-size="12" text-anchor="middle">free · private</text>
+    </g>
+
+    <!-- main arrows -->
+    <g font-size="11" font-weight="700" text-anchor="middle">
+      <path d="M186 296 H 210" stroke="#9a9a94" stroke-width="2" marker-end="url(#n)"/>
+      <path d="M362 296 H 386" stroke="#9a9a94" stroke-width="2" marker-end="url(#n)"/>
+      <text x="376" y="242" fill="#9a9a94">clean</text>
+      <path d="M538 296 H 562" stroke="#4cc38a" stroke-width="2" marker-end="url(#g)"/>
+      <text x="552" y="242" fill="#4cc38a">light</text>
+      <path d="M714 296 H 738" stroke="#4cc38a" stroke-width="2" marker-end="url(#g)"/>
+      <path d="M890 296 H 914" stroke="#4cc38a" stroke-width="2" marker-end="url(#g)"/>
+      <text x="904" y="242" fill="#4cc38a">pass</text>
+      <path d="M1066 296 H 1090" stroke="#4cc38a" stroke-width="2" marker-end="url(#g)"/>
+      <text x="1080" y="242" fill="#4cc38a">4–5</text>
+    </g>
+
+    <!-- privacy path -->
+    <path d="M288 248 V 196" stroke="#f0a04b" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#o)"/>
+    <text x="296" y="230" fill="#f0a04b" font-size="11" font-weight="700">secret</text>
+    <path d="M640 196 V 246" stroke="#f0a04b" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#o)"/>
+    <text x="648" y="230" fill="#f0a04b" font-size="11" font-weight="700">answer returned as-is</text>
+
+    <!-- escalation drops -->
+    <g font-size="11" font-weight="700" fill="#7c95f5">
+      <path d="M464 344 V 466" stroke="#7c95f5" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#b)"/>
+      <text x="472" y="410">heavy</text>
+      <path d="M640 344 V 466" stroke="#7c95f5" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#b)"/>
+      <text x="648" y="410">offline</text>
+      <path d="M816 344 V 466" stroke="#7c95f5" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#b)"/>
+      <text x="824" y="410">fails</text>
+      <path d="M992 344 C 992 420, 940 440, 920 466" fill="none" stroke="#7c95f5" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#b)"/>
+      <text x="1000" y="410">1–3</text>
+    </g>
+
+    <!-- otari lane -->
+    <rect x="390" y="470" width="528" height="96" rx="16" fill="#131826" stroke="#7c95f5" stroke-width="2"/>
+    <text x="414" y="504" fill="#f2f2ee" font-size="18" font-weight="700">Otari gateway</text>
+    <text x="414" y="530" fill="#9a9a94" font-size="13">one key for 40+ providers · budget cap · usage tracking</text>
+    <text x="414" y="552" fill="#9a9a94" font-size="13">errors (over budget, bad key) passed straight back</text>
+    <path d="M918 518 H 1090" stroke="#7c95f5" stroke-width="2" marker-end="url(#b)"/>
+    <rect x="1094" y="474" width="148" height="88" rx="14" fill="#7c95f5" fill-opacity="0.16" stroke="#7c95f5" stroke-width="2"/>
+    <text x="1168" y="512" fill="#7c95f5" font-size="15" font-weight="700" text-anchor="middle">Cloud model</text>
+    <text x="1168" y="534" fill="#9a9a94" font-size="12" text-anchor="middle">OpenAI · Anthropic</text>
+    <text x="1168" y="550" fill="#9a9a94" font-size="12" text-anchor="middle">Mistral · …</text>
+
+    <!-- real results strip -->
+    <rect x="38" y="604" width="1204" height="64" rx="14" fill="#15171c" stroke="#2e323b"/>
+    <text x="62" y="642" fill="#9a9a94" font-size="14">Real run · llama3.2:3b + self-hosted Otari</text>
+    <text x="400" y="642" fill="#4cc38a" font-size="16" font-weight="700">11 of 18 answered locally</text>
+    <text x="640" y="642" fill="#7c95f5" font-size="16" font-weight="700">7 escalated through Otari</text>
+    <text x="880" y="642" fill="#f0a04b" font-size="16" font-weight="700">4 of 4 secrets kept on-device</text>
+  </g>
+</svg>
