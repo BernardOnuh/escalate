@@ -1,7 +1,8 @@
 """Fake OpenAI-compatible backends for demos and tests without Docker or Ollama.
 
-The mock local model is deliberately small-model-shaped: it handles short,
-everyday prompts but hedges on hard reasoning tasks and fumbles nested JSON.
+The mock local model is deliberately small-model-shaped: it handles everyday
+prompts, fumbles nested JSON, hedges on "unknowable" questions, and rates its
+own answer low on "obscure" ones.
 The mock Otari gateway answers everything and requires a Bearer key.
 """
 import json
@@ -9,7 +10,8 @@ import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-HARD = re.compile(r"(?i)\b(prove|architecture|design a|trade-?offs?|step by step|optimi[sz]e|distributed)\b")
+UNKNOWABLE = re.compile(r"(?i)\bunknowable\b")   # the mock hedges on these
+OBSCURE = re.compile(r"(?i)\bobscure\b")         # the mock answers, then rates itself low
 
 
 def usage(prompt, answer):
@@ -27,12 +29,15 @@ def completion(model, prompt, answer):
 
 
 def local_answer(req, prompt):
+    last = (req.get("messages") or [{}])[-1].get("content") or ""
+    if "how confident" in last:
+        return "2" if OBSCURE.search(prompt) else "5"
     wants_json = (req.get("response_format") or {}).get("type") == "json_object"
     if wants_json:
         if "nested" in prompt.lower():
             return '{"items": [{"name": "a", "tags": ["x"'  # truncated JSON
         return json.dumps({"answer": "ok", "source": "local"})
-    if HARD.search(prompt):
+    if UNKNOWABLE.search(prompt):
         return "I'm not sure I can give a reliable answer to that."
     return "Local answer: " + prompt.strip().splitlines()[-1][:120]
 

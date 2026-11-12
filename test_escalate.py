@@ -91,7 +91,8 @@ class EndToEnd(unittest.TestCase):
 
     def setUp(self):
         escalate.CFG.update(local_url=self.local_url, otari_url=self.otari_url, otari_key="tk-test",
-                            local_model="mock-local", cloud_model="mock:cloud", timeout=5)
+                            local_model="mock-local", cloud_model="mock:cloud", timeout=5,
+                            self_check=True, min_confidence=4, heavy_chars=2000)
         escalate.STATS.reset()
 
     def chat(self, prompt, model="auto", headers=None, **extra):
@@ -109,10 +110,31 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual((status, route), (200, "local"))
         self.assertEqual(body["model"], "mock-local")
 
-    def test_hard_prompt_escalates_to_otari(self):
-        status, route, reason, body = self.chat("Design a distributed rate limiter")
-        self.assertEqual((status, route, reason), (200, "cloud", "escalated: model hedged"))
+    def test_heavy_task_skips_local_and_goes_to_otari(self):
+        status, route, reason, body = self.chat("Design a rate limiter for our API")
+        self.assertEqual((status, route, reason), (200, "cloud", "escalated: heavy task (design a)"))
         self.assertEqual(body["model"], "mock:cloud")
+
+    def test_long_prompt_is_heavy(self):
+        self.assertEqual(self.chat("x " * 1500)[1:3], ("cloud", "escalated: heavy task (long prompt)"))
+
+    def test_hedged_answer_escalates(self):
+        self.assertEqual(self.chat("Answer this unknowable question")[1:3], ("cloud", "escalated: model hedged"))
+
+    def test_low_self_confidence_escalates(self):
+        status, route, reason, _ = self.chat("Which year was the obscure crate published?")
+        self.assertEqual((route, reason), ("cloud", "escalated: low confidence (2/5)"))
+
+    def test_confident_answer_reports_score(self):
+        self.assertEqual(self.chat("Rename x")[2], "local answer passed checks (confidence 5/5)")
+
+    def test_self_check_can_be_disabled(self):
+        escalate.CFG["self_check"] = False
+        self.assertEqual(self.chat("Which year was the obscure crate published?")[1:3],
+                         ("local", "local answer passed checks"))
+
+    def test_forced_local_skips_heavy_rule(self):
+        self.assertEqual(self.chat("Design a database schema", model="local")[1], "local")
 
     def test_broken_json_escalates(self):
         status, route, reason, body = self.chat("Return nested JSON", response_format={"type": "json_object"})

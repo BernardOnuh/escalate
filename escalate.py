@@ -32,6 +32,11 @@ CFG = {
     "price_in": float(os.environ.get("CLOUD_PRICE_IN", "0.15")),
     "price_out": float(os.environ.get("CLOUD_PRICE_OUT", "0.60")),
     "timeout": float(os.environ.get("ESCALATE_TIMEOUT", "120")),
+    # Ask the local model to rate its own answer; escalate below this score (1-5).
+    "self_check": os.environ.get("ESCALATE_SELF_CHECK", "1") != "0",
+    "min_confidence": int(os.environ.get("ESCALATE_MIN_CONFIDENCE", "4")),
+    # Prompts longer than this skip the local model and go straight to the cloud.
+    "heavy_chars": int(os.environ.get("ESCALATE_HEAVY_CHARS", "2000")),
 }
 
 # Patterns that keep a prompt on-device no matter what.
@@ -50,6 +55,17 @@ SENSITIVE = [
 HEDGES = re.compile(
     r"(?i)\b(?:i (?:don't|do not) know|i'm not sure|i am not sure|"
     r"i (?:can't|cannot) (?:help|answer)|beyond my (?:knowledge|abilities))"
+)
+
+# Tasks a small local model reliably does badly, so they skip it entirely.
+HEAVY = re.compile(
+    r"(?i)\b(design (?:a|an|the)|architecture|prove|proof|trade-?offs?|distributed|"
+    r"step[- ]by[- ]step|threat model|migration plan)\b"
+)
+
+SELF_CHECK_PROMPT = (
+    "On a scale of 1 to 5, how confident are you that your previous answer is "
+    "correct and complete? Reply with only the number."
 )
 
 
@@ -91,6 +107,34 @@ def weak_answer(req, resp):
     if HEDGES.search(text):
         return "model hedged"
     return None
+
+
+def heavy_task(text):
+    """Return why a prompt is too heavy for the local model, else None."""
+    if len(text) > CFG["heavy_chars"]:
+        return "long prompt"
+    m = HEAVY.search(text)
+    return m.group(1).lower() if m else None
+
+
+def confidence(req, resp):
+    """Ask the local model to score its own answer 1-5. None if it can't say."""
+    msg = resp["choices"][0].get("message") or {}
+    if msg.get("tool_calls") or not CFG["self_check"]:
+        return None
+    body = {
+        "model": CFG["local_model"], "stream": False, "temperature": 0, "max_tokens": 4,
+        "messages": list(req.get("messages") or []) + [
+            {"role": "assistant", "content": msg.get("content") or ""},
+            {"role": "user", "content": SELF_CHECK_PROMPT},
+        ],
+    }
+    try:
+        reply = call_upstream(CFG["local_url"], "", body)["choices"][0]["message"]["content"] or ""
+    except (urllib.error.URLError, OSError, ValueError, KeyError, IndexError, TypeError):
+        return None
+    m = re.search(r"[1-5]", reply)
+    return int(m.group()) if m else None
 
 
 def call_upstream(base_url, key, body):
@@ -172,29 +216,40 @@ def route(req, mode):
     """Run one chat request. Returns (status, body, route, reason, sensitive)."""
     body = dict(req)
     body["stream"] = False
-    sensitive = find_sensitive(prompt_text(req.get("messages")))
-    local_err = None
+    text = prompt_text(req.get("messages"))
+    sensitive = find_sensitive(text)
+    heavy = heavy_task(text) if mode == "auto" and not sensitive else None
 
-    if mode != "cloud" or sensitive:
+    if mode == "cloud" and not sensitive:
+        escalate_reason = "forced cloud"
+    elif heavy:
+        escalate_reason = "escalated: heavy task (%s)" % heavy
+    else:
         try:
             resp = call_upstream(CFG["local_url"], "", dict(body, model=CFG["local_model"]))
-            weak = weak_answer(req, resp)
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            if sensitive or mode == "local":
+                msg = "local model unavailable and prompt cannot leave the device" if sensitive else "local model unavailable"
+                return 503, {"error": {"message": msg, "detail": str(e)}}, "error", msg, sensitive
+            escalate_reason = "escalated: local model unavailable"
+        else:
             if sensitive:
                 reason = "private: " + ", ".join(sensitive)
                 if mode == "cloud":
                     reason += " (cloud blocked)"
                 return 200, resp, "local", reason, sensitive
-            if mode == "local" or not weak:
-                return 200, resp, "local", "forced local" if mode == "local" else "local answer passed checks", sensitive
+            if mode == "local":
+                return 200, resp, "local", "forced local", sensitive
+            weak = weak_answer(req, resp)
+            score = None if weak else confidence(req, resp)
+            if score is not None and score < CFG["min_confidence"]:
+                weak = "low confidence (%d/5)" % score
+            if not weak:
+                reason = "local answer passed checks"
+                if score is not None:
+                    reason += " (confidence %d/5)" % score
+                return 200, resp, "local", reason, sensitive
             escalate_reason = "escalated: " + weak
-        except (urllib.error.URLError, OSError, ValueError) as e:
-            local_err = str(e)
-            if sensitive or mode == "local":
-                msg = "local model unavailable and prompt cannot leave the device" if sensitive else "local model unavailable"
-                return 503, {"error": {"message": msg, "detail": local_err}}, "error", msg, sensitive
-            escalate_reason = "escalated: local model unavailable"
-    else:
-        escalate_reason = "forced cloud"
 
     try:
         resp = call_upstream(CFG["otari_url"], CFG["otari_key"], dict(body, model=CFG["cloud_model"]))

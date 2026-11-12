@@ -33,17 +33,21 @@ Escalate sits between your tools and the models. It gives every request to your 
 flowchart LR
     A[Your app / IDE / agent] -->|OpenAI API| E{Escalate}
     E -->|contains secrets or personal data| L[🖥️ Local model<br/>Ollama · llamafile]
-    E -->|everything else, first| L
-    L -->|answer passes checks| A
-    L -->|empty · truncated · bad JSON · hedged · offline| O[Otari gateway<br/>keys · budgets · usage]
+    E -->|everyday prompt| L
+    E -->|heavy task: design · proof · architecture · very long| O
+    L --> C{Checks + self-check<br/>confidence 1–5}
+    C -->|passes| A
+    C -->|empty · truncated · bad JSON · hedged · low confidence · offline| O[Otari gateway<br/>keys · budgets · usage]
     O --> P[☁️ OpenAI · Anthropic · Mistral · …]
     P --> A
 ```
 
 | Situation | Where it goes |
 |---|---|
-| Local answer passes the checks | 🖥️ **Local**: free, fast, private |
+| Local answer passes the checks **and** the model rates its own answer 4–5 out of 5 | 🖥️ **Local**: free, fast, private |
 | Local answer is empty, truncated, invalid JSON, or hedged ("I'm not sure…") | ☁️ **Escalated** through Otari |
+| **Self-check:** the local model rates its own answer 3/5 or lower | ☁️ **Escalated** through Otari |
+| **Heavy task** (system design, proofs, architecture, trade-offs, very long prompts) | ☁️ **Straight to Otari**, skipping a local attempt that would waste time |
 | Local model is offline | ☁️ **Escalated** through Otari |
 | Prompt contains an API key, private key, password, JWT, email address or card number | 🔒 **Always local**, even if the client explicitly asks for the cloud. If the local model is down, the request is **refused rather than leaked**. |
 
@@ -60,17 +64,39 @@ python3 bench.py                # in a second terminal
 Then open **http://127.0.0.1:8787** for the live dashboard: the share of requests served locally, dollars saved against an all-cloud setup, Otari spend, private prompts kept on-device, and the reason behind every routing decision.
 
 ```
-local 200  Write a one-line commit message for: fixed typo in README   local answer passed checks
-local 200  Give me a regex that matches a US zip code.                 local answer passed checks
+local 200  Write a one-line commit message for: fixed typo in README   local answer passed checks (confidence 5/5)
+local 200  Give me a regex that matches a US zip code.                 local answer passed checks (confidence 5/5)
 cloud 200  Return nested JSON listing items with name and tags.        escalated: invalid JSON
-cloud 200  Design a distributed rate limiter and explain the trade-of  escalated: model hedged
+cloud 200  Which year was the obscure Rust crate `tinyvec-ext` first   escalated: low confidence (2/5)
+cloud 200  Design a distributed rate limiter and explain the trade-of  escalated: heavy task (design a)
 local 200  Debug this config: OPENAI_KEY=sk-proj-abcdefghijklmnopqrst  private: API key
 local 200  Design a distributed cache for user sessions. Customer: bo  private: email address
 ...
-16 requests: 12 local (75%), 4 cloud, 0 errors, 4 private prompts kept on-device
+18 requests: 12 local (67%), 6 cloud, 0 errors, 4 private prompts kept on-device
 ```
 
 > `--mock` uses stand-in models so anyone can see the routing in seconds. For real answers, follow the setup below.
+
+## Real results
+
+The same workload with **real models**: `llama3.2:3b` on Ollama locally, and escalations through a real, self-hosted Otari gateway with an API key and a budget. Run on a MacBook Pro.
+
+```
+local 200  Write a one-line commit message for: fixed typo in README   local answer passed checks (confidence 4/5)
+local 200  Convert this to snake_case: getUserProfileById              local answer passed checks (confidence 5/5)
+local 200  Give me a regex that matches a US zip code.                 local answer passed checks (confidence 4/5)
+cloud 200  Return nested JSON listing items with name and tags.        escalated: low confidence (3/5)
+cloud 200  Which year was the obscure Rust crate `tinyvec-ext` first   escalated: low confidence (3/5)
+cloud 200  What is the default of the obscure Linux tunable vm.waterm  escalated: low confidence (3/5)
+cloud 200  Design a distributed rate limiter and explain the trade-of  escalated: heavy task (design a)
+cloud 200  Propose an architecture for multi-region failover.          escalated: heavy task (architecture)
+local 200  Debug this config: OPENAI_KEY=sk-proj-abcdefghijklmnopqrst  private: API key
+local 200  Design a distributed cache for user sessions. Customer: bo  private: email address
+...
+18 requests: 11 local (61%), 7 cloud, 0 errors, 4 private prompts kept on-device
+```
+
+What the real run taught us: a small model **never says "I'm not sure"**. It answers everything confidently, including niche facts it is making up. Hedge detection alone escalated nothing. Two additions fixed that: asking the model to **rate its own answer** catches the made-up facts, and **heavy-task rules** send design and proof work straight to the cloud. The self-check isn't perfect: one simple summary scored 3/5 and escalated when it didn't need to. That is the safe direction to be wrong in.
 
 ## Real setup
 
@@ -83,13 +109,56 @@ ollama pull llama3.2:3b && ollama serve            # → http://localhost:11434/
 ./Llama-3.2-3B-Instruct.llamafile --server         # → http://localhost:8080/v1
 ```
 
-**2. Run Otari.**
+**2. Run Otari.** With Docker:
 
 ```bash
 docker run -v otari:/data -p 127.0.0.1:8000:8000 mzdotai/otari:latest
 ```
 
 Open the setup link it prints and add a provider (for example OpenAI). Create an API key (`tk-…`) and **give it a budget**. That budget is the hard ceiling on what escalations can ever cost.
+
+<details>
+<summary><b>Without Docker</b> (from source with <code>uv</code> and SQLite, which is how the real results above were produced)</summary>
+
+```bash
+git clone https://github.com/mozilla-ai/otari && cd otari
+uv sync
+```
+
+Create `config.yml`. It declares the provider, Escalate's key and its budget, so no dashboard clicks are needed:
+
+```yaml
+database_url: "sqlite:///./otari.db"
+host: "127.0.0.1"
+port: 8000
+default_pricing: true
+require_pricing: true
+
+providers:
+  openai:
+    api_key: ${OPENAI_API_KEY}
+  ollama:                      # keyless; lets you test the Otari path with no cloud key
+    api_base: "http://localhost:11434"
+
+pricing:                       # local models need a price for budgets to apply
+  "ollama:llama3.2:3b": {input_price_per_million: 0.15, output_price_per_million: 0.60}
+
+budgets:
+  escalate-cap: {max_budget: 2.0, reset_alignment: calendar_month}
+api_keys:
+  escalate:
+    secret: ${ESCALATE_OTARI_KEY}   # 50+ characters
+    user_id: escalate
+    ceiling: escalate-cap
+```
+
+```bash
+export ESCALATE_OTARI_KEY=$(python3 -c "import secrets; print('tk-' + secrets.token_urlsafe(48))")
+uv run otari serve --config config.yml
+```
+
+Use the same `ESCALATE_OTARI_KEY` value as `OTARI_API_KEY` for Escalate.
+</details>
 
 **3. Start Escalate.**
 
@@ -147,6 +216,9 @@ Together they form a fully open, self-hostable AI stack: your model, your gatewa
 | `CLOUD_MODEL` | `openai:gpt-4o-mini` | Model used for escalations |
 | `CLOUD_PRICE_IN` / `CLOUD_PRICE_OUT` | `0.15` / `0.60` | USD per 1M tokens, for the savings estimate |
 | `ESCALATE_TIMEOUT` | `120` | Upstream timeout in seconds |
+| `ESCALATE_SELF_CHECK` | `1` | Set to `0` to skip the confidence self-check |
+| `ESCALATE_MIN_CONFIDENCE` | `4` | Escalate when the local model rates its answer below this (1–5) |
+| `ESCALATE_HEAVY_CHARS` | `2000` | Prompts longer than this go straight to the cloud |
 
 ## API
 
@@ -164,14 +236,14 @@ Together they form a fully open, self-hostable AI stack: your model, your gatewa
 python3 -m unittest -v
 ```
 
-There are 17 tests. They cover secret detection (including checks that ordinary developer prompts are *not* flagged), every quality check, and the full proxy end to end against the mock backends: escalation, forced routes, the local model going offline, Otari rejecting a request, and the guarantee that a secret is refused rather than sent to the cloud. CI runs them on Python 3.10 and 3.13, and they also pass on 3.9.
+There are 23 tests. They cover secret detection (including checks that ordinary developer prompts are *not* flagged), every quality check, the confidence self-check, the heavy-task rules, and the full proxy end to end against the mock backends: escalation, forced routes, the local model going offline, Otari rejecting a request, and the guarantee that a secret is refused rather than sent to the cloud. CI runs them on Python 3.10 and 3.13, and they also pass on 3.9.
 
 ## Project layout
 
 ```
 escalate.py        the router: routing, privacy guard, quality checks, stats, HTTP server
 dashboard.html     live dashboard served at /
-bench.py           16-prompt developer workload for demos
+bench.py           18-prompt developer workload for demos
 mock_backends.py   mock local model + mock Otari gateway (used by --mock and tests)
 test_escalate.py   test suite
 ```
@@ -179,7 +251,8 @@ test_escalate.py   test suite
 ## Limitations and roadmap
 
 - **No streaming yet.** Responses come back in one piece. Streaming the local answer while checking it is next.
-- **Heuristic quality checks.** Planned: a tiny local judge model and log-prob confidence scoring.
+- **The self-check costs one extra short local call,** about a second on a laptop. Small models are sometimes overconfident or underconfident, so a few requests escalate unnecessarily or stay local when they shouldn't. Planned: log-prob confidence scoring, and a separate local judge model.
+- **Heavy-task rules are keyword-based.** Planned: learning the routing from which escalations actually produced better answers.
 - **Regex-based privacy guard.** Treat it as a safety net, not a guarantee. Planned: per-path rules (for example, "never send `src/billing/**`").
 - **Estimated savings.** Locally served tokens are priced at the cloud model's rate.
 - **Planned: Otari usage sync**, pulling real per-key spend from Otari's API into the dashboard.

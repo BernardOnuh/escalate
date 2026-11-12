@@ -15,6 +15,8 @@ WORKLOAD = [
     ("Rename variable `x` to something clearer: x = len(users)", None),
     ("Return JSON with a field 'answer' saying ok.", "json_object"),
     ("Return nested JSON listing items with name and tags.", "json_object"),
+    ("Which year was the obscure Rust crate `tinyvec-ext` first published, and by whom?", None),
+    ("What is the default of the obscure Linux tunable vm.watermark_boost_factor?", None),
     ("Design a distributed rate limiter and explain the trade-offs.", None),
     ("Prove that this sorting algorithm is O(n log n) step by step.", None),
     ("Propose an architecture for multi-region failover.", None),
